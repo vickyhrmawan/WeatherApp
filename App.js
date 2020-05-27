@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,14 @@ import Axios from 'axios';
 import Icon from 'react-native-vector-icons/Feather';
 import Modal from 'react-native-modal';
 import AsyncStorage from '@react-native-community/async-storage';
+import LinearGradient from 'react-native-linear-gradient';
+import moment from 'moment';
+import 'moment/locale/zh-cn';
+moment.locale('zh-cn');
+require('moment-timezone');
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
-var options = {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'};
 
 function wait(timeout) {
   return new Promise(resolve => {
@@ -34,7 +38,7 @@ const App = () => {
   const [tomorrowData, setTomorrowData] = useState([]);
   const [twodaysData, setTwodaysData] = useState([]);
   const [current, setCurrent] = useState([]);
-  const [lang, setLang] = useState('en');
+  const [lang, setLang] = useState(initial);
   const [city, setCity] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -52,9 +56,9 @@ const App = () => {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    RecentWeather(lang);
+    RecentWeather();
     wait(2000).then(() => setRefreshing(false));
-  }, [refreshing, city]);
+  }, [refreshing, city, lang]);
 
   const toggleMenu = () => {
     setMenu(!menu);
@@ -74,41 +78,45 @@ const App = () => {
 
   const changeCity = async cityInput => {
     try {
-      await AsyncStorage.setItem('choosenCity', cityInput);
+      await AsyncStorage.setItem('chosenCity', cityInput);
     } catch (e) {
       console.log(e);
     }
   };
 
   const submitCity = () => {
-    RecentWeather(lang);
+    RecentWeather();
     toggleMenu();
   };
 
-  //change language
-  const changeLang = language => {
-    showLoading();
-    RecentWeather(language);
-    setLang(language);
+  const changeLang = async language => {
+    try {
+      // showLoading();
+      await AsyncStorage.setItem('chosenLang', language);
+      RecentWeather();
+      toggleMore();
+    } catch (e) {
+      console.log(e);
+    }
   };
 
   //get data weather
-  const RecentWeather = async value => {
+  const RecentWeather = async () => {
     try {
-      console.log(isLoading);
+      let resultLang = await getLang();
       let resultCity = await getStorage();
-      console.log(resultCity);
-      if (resultCity !== '') {
+      if (resultCity !== '' && resultLang !== '') {
         let res = await Axios.get(
-          `https://api.weatherbit.io/v2.0/forecast/daily?city=${resultCity}&lang=${value}&days=3&key=e410ea4b0bfe4ca18772b4a03afbd0d5`,
+          `https://api.weatherbit.io/v2.0/forecast/daily?city=${resultCity}&lang=${resultLang}&days=3&key=e410ea4b0bfe4ca18772b4a03afbd0d5`,
         );
+        console.log(res);
         if (res) {
           setData(res.data.data[0]);
           setTomorrowData(res.data.data[1]);
           setTwodaysData(res.data.data[2]);
         }
         let cur = await Axios.get(
-          `https://api.weatherbit.io/v2.0/current?city=${resultCity}&lang=${value}&key=e410ea4b0bfe4ca18772b4a03afbd0d5`,
+          `https://api.weatherbit.io/v2.0/current?city=${resultCity}&lang=${resultLang}&key=e410ea4b0bfe4ca18772b4a03afbd0d5`,
         );
         if (cur) {
           setCurrent(cur.data.data[0]);
@@ -118,12 +126,17 @@ const App = () => {
       }
     } catch (error) {
       console.log('error persons ', error);
+      lang === 'en'
+        ? alert('Please input the correct city')
+        : alert('请输入正确的城市');
+      hideLoading();
+      toggleMenu();
     }
   };
 
   const getStorage = async () => {
     try {
-      let checkCity = await AsyncStorage.getItem('choosenCity');
+      let checkCity = await AsyncStorage.getItem('chosenCity');
       if (checkCity === null) {
         setCity('jakarta');
         return city;
@@ -136,10 +149,25 @@ const App = () => {
     }
   };
 
+  const getLang = async () => {
+    try {
+      let checkLang = await AsyncStorage.getItem('chosenLang');
+      if (checkLang === null) {
+        setLang('en');
+        return lang;
+      } else {
+        setLang(checkLang);
+        return lang;
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   useEffect(() => {
     showLoading();
-    RecentWeather('en');
-  }, [city]);
+    RecentWeather();
+  }, [lang, city]);
 
   if (isLoading === true) {
     return (
@@ -151,25 +179,27 @@ const App = () => {
 
   return (
     <ScrollView
-      style={styles.container}
+      keyboardShouldPersistTaps="never"
+      contentContainerStyle={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        < RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }>
-      <View style={styles.containerHeader}>
-        <View style={{flex: 1, alignItems: 'center'}}>
+      {/* <LinearGradient colors={['#4c669f', '#3b5998', '#192f6a']} style={styles.linearGradient}> */}
+      < View style={styles.containerHeader} >
+        <View style={{ flex: 1, alignItems: 'center' }}>
           <TouchableOpacity onPress={toggleMenu}>
-            <Icon name="menu" size={width / 13} color="white" />
+            <Icon name="search" size={width / 13} color="#ffffff" />
           </TouchableOpacity>
         </View>
-        <View style={{flex: 4}}>
+        <View style={{ flex: 4 }}>
           <Text style={styles.cityText}>{current.city_name}</Text>
         </View>
-        <View style={{flex: 1, alignItems: 'center'}}>
+        <View style={{ flex: 1, alignItems: 'center' }}>
           <TouchableOpacity onPress={toggleMore}>
-            <Icon name="more-horizontal" size={width / 13} color="white" />
+            <Icon name="settings" size={width / 13} color="#ffffff" />
           </TouchableOpacity>
         </View>
-      </View>
+      </View >
       <View style={styles.containerBody}>
         <Image
           style={styles.tinyLogo}
@@ -182,6 +212,9 @@ const App = () => {
         </Text>
         <Text style={styles.cityText}>
           {current && current.weather && current.weather.description}
+        </Text>
+        <Text style={styles.cityText}>
+          {lang === 'zh' ? moment().tz(current.timezone).format('hh.mm a z') : moment().locale('en').tz(current.timezone).format('LT z')}
         </Text>
       </View>
       <View style={styles.containerFooter}>
@@ -245,14 +278,13 @@ const App = () => {
               />
               <Text style={styles.textInsideFooter}>
                 {lang === 'en'
-                  ? new Date(twodaysData.valid_date)
-                      .toDateString()
-                      .split(' ')
-                      .slice(0, 1)
-                  : new Date(twodaysData.valid_date)
-                      .toLocaleDateString('zh-CN', options)
-                      .slice(11, 13)}{' '}
-                •{' '}
+                  ? `${new Date(twodaysData.valid_date)
+                    .toDateString()
+                    .split(' ')
+                    .slice(0, 1)} • `
+                  : `${moment(twodaysData.valid_date)
+                    .format('dddd, MMMM Do YYYY')
+                    .slice(1, 3)} • `}
                 {twodaysData &&
                   twodaysData.weather &&
                   twodaysData.weather.description}
@@ -286,8 +318,8 @@ const App = () => {
                   km/h
                 </Text>
               </View>
-              <View style={styles.justifyCenter}>
-                <Icon name="wind" size={width / 10} color="white" />
+              <View style={{ flex: 1 }}>
+                <Icon name="wind" size={width / 10} color="#ffffff" />
               </View>
             </View>
             <View style={styles.insideFooter}>
@@ -302,8 +334,8 @@ const App = () => {
                   °C
                 </Text>
               </View>
-              <View style={styles.justifyCenter}>
-                <Icon name="thermometer" size={width / 10} color="white" />
+              <View style={{ flex: 1 }}>
+                <Icon name="thermometer" size={width / 10} color="#ffffff" />
               </View>
             </View>
           </View>
@@ -317,8 +349,8 @@ const App = () => {
                   {current.uv !== undefined ? current.uv.toFixed(2) : '0'}
                 </Text>
               </View>
-              <View style={styles.justifyCenter}>
-                <Icon name="sun" size={width / 10} color="white" />
+              <View style={{ flex: 1 }}>
+                <Icon name="sun" size={width / 10} color="#ffffff" />
               </View>
             </View>
             <View style={styles.insideFooter}>
@@ -331,32 +363,36 @@ const App = () => {
                   hPa
                 </Text>
               </View>
-              <View style={styles.justifyCenter}>
-                <Icon name="navigation" size={width / 10} color="white" />
+              <View style={{ flex: 1 }}>
+                <Icon name="navigation" size={width / 10} color="#ffffff" />
               </View>
             </View>
           </View>
         </View>
       </View>
+      {/* </LinearGradient> */}
       {/* Modal Choose City */}
       <Modal
         isVisible={menu}
         animationIn="fadeIn"
         animationOut="fadeOut"
+        hideModalContentWhileAnimating='true'
         onBackdropPress={() => setMenu(false)}>
-        <View style={{flex: 1, alignItems: 'center', marginTop: width / 10}}>
+        <View style={{ flex: 1, alignItems: 'center', marginTop: width / 10 }}>
           <Text style={styles.textInsideFooter}>
             {lang === 'en' ? 'Choose Your Location' : '选择您的位置'}
           </Text>
           <View
             style={{
-              backgroundColor: 'white',
+              backgroundColor: '#ffffff',
               width: width / 2,
               marginVertical: 10,
             }}>
             <TextInput
               onChangeText={changeCity}
-              onSubmitEditing={RecentWeather}
+              onSubmitEditing={() => {
+                RecentWeather(), toggleMenu();
+              }}
               clearButtonMode={'always'}
               clearTextOnFocus={true}
               enablesReturnKeyAutomatically={true}
@@ -401,19 +437,19 @@ const App = () => {
             <TouchableOpacity onPress={() => changeLang('en')}>
               <View
                 style={{
-                  backgroundColor: lang === 'en' ? 'white' : 'black',
+                  backgroundColor: lang === 'en' ? '#ffffff' : 'rgb(0,0,0,.4)',
                   width: width / 6,
                   height: width / 6,
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderWidth: 2,
-                  borderColor: 'white',
+                  borderColor: '#ffffff',
                   borderRadius: 10,
                   margin: 5,
                 }}>
                 <Text
                   style={{
-                    color: lang === 'en' ? 'black' : 'white',
+                    color: lang === 'en' ? '#000000' : '#ffffff',
                     fontSize: width / 20,
                   }}>
                   en
@@ -423,19 +459,19 @@ const App = () => {
             <TouchableOpacity onPress={() => changeLang('zh')}>
               <View
                 style={{
-                  backgroundColor: lang === 'zh' ? 'white' : 'black',
+                  backgroundColor: lang === 'zh' ? '#ffffff' : 'rgb(0,0,0,.4)',
                   width: width / 6,
                   height: width / 6,
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderWidth: 2,
-                  borderColor: 'white',
+                  borderColor: '#ffffff',
                   borderRadius: 10,
                   margin: 5,
                 }}>
                 <Text
                   style={{
-                    color: lang === 'zh' ? 'black' : 'white',
+                    color: lang === 'zh' ? '#000000' : '#ffffff',
                     fontSize: width / 20,
                   }}>
                   zh
@@ -445,7 +481,8 @@ const App = () => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+
+    </ScrollView >
   );
 };
 
@@ -454,28 +491,32 @@ export default App;
 const styles = StyleSheet.create({
   //Container
   container: {
-    backgroundColor: 'black',
+    backgroundColor: '#000000',
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  linearGradient: {
     flex: 1,
   },
   containerHeader: {
-    flex: 1,
+    flex: 0,
     justifyContent: 'center',
     marginTop: width / 20,
     flexDirection: 'row',
   },
   containerBody: {
-    flex: 3,
+    flex: 0,
     marginVertical: width / 40,
   },
   containerFooter: {
-    flex: 4,
+    flex: 1,
     marginTop: width / 30,
   },
   containerFooterTop: {
     flex: 1,
     margin: 5,
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: '#ffffff',
     borderRadius: 10,
   },
   footerTopList: {
@@ -499,7 +540,7 @@ const styles = StyleSheet.create({
     flex: 1,
     margin: 5,
     borderWidth: 1,
-    borderColor: 'white',
+    borderColor: '#ffffff',
     borderRadius: 10,
     marginTop: width / 30,
   },
@@ -507,7 +548,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     borderBottomWidth: 2,
-    borderBottomColor: 'white',
+    borderBottomColor: '#ffffff',
   },
   footerBotBot: {
     flex: 1,
@@ -516,43 +557,44 @@ const styles = StyleSheet.create({
   insideFooter: {
     flex: 1,
     justifyContent: 'center',
-    padding: width / 25,
+    padding: width / 30,
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
   justifyCenter: {
     justifyContent: 'center',
+    flex: 3
   },
   //Text
   cityText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: width / 18,
     textAlign: 'center',
   },
   tempNumber: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: width / 6,
     textAlign: 'center',
   },
   textInsideFooter: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: width / 20,
   },
   textInsideModal: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: width / 20,
   },
   //Image
   tinyLogo: {
-    width: width / 4,
-    height: width / 4,
+    width: width / 3,
+    height: width / 3,
     alignSelf: 'center',
     margin: 0,
   },
   iconFooter: {
     width: width / 10,
     height: width / 10,
-    margin: 0,
+    marginRight: 5,
   },
   loading: {
     position: 'absolute',
@@ -560,7 +602,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'black',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
